@@ -65,6 +65,23 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
     }));
 
     try {
+      // Validate table status to prevent ordering on a booked table
+      const tableRes = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`);
+      if (tableRes.data && Array.isArray(tableRes.data)) {
+        const currentTable = tableRes.data.find((t: any) => t.id === tableNumber);
+        if (currentTable && currentTable.active === "2") {
+          toast.dismiss(loading);
+          toast.error("តុនេះត្រូវបានកក់ហើយ! (Table is booked!)", {
+            autoClose: 3000,
+            position: "top-center",
+            className: "font-battambang",
+            containerId: "modal-toast"
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const data = {
         data: {
           id: historyOrder ? historyOrder?.data.id : null,

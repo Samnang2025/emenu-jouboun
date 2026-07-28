@@ -209,12 +209,20 @@ export default function TableSelectionPage() {
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
               {filteredTables.map((table) => {
                 const isOccupied = table.active === "1";
+                const isBooking = table.active === "2";
                 return (
                   <button
                     key={table.id}
-                    onClick={() => handleTableSelect(table.id)}
-                    className={`group relative flex flex-col justify-center items-center py-6 px-3 border rounded-2xl transition-all duration-300 hover:scale-[1.04] active:scale-[0.97] shadow-sm ${isOccupied
+                    onClick={() => {
+                      if (!isBooking) handleTableSelect(table.id);
+                    }}
+                    disabled={isBooking}
+                    className={`group relative flex flex-col justify-center items-center py-6 px-3 border rounded-2xl transition-all duration-300 shadow-sm ${
+                      isBooking ? "cursor-not-allowed opacity-90" : "hover:scale-[1.04] active:scale-[0.97]"
+                    } ${isOccupied
                       ? "bg-red-300 border-rose-200/80 hover:border-rose-400 text-white hover:shadow-[0_8px_20px_rgba(239,68,68,0.1)]"
+                      : isBooking
+                      ? "bg-yellow-300 border-yellow-400 text-yellow-900 shadow-inner"
                       : "bg-sky-50 hover:bg-sky-100/70 border-sky-200/80 hover:border-sky-400 text-sky-950 hover:shadow-[0_8px_20px_rgba(14,165,233,0.1)]"
                       }`}
                   >
@@ -222,10 +230,12 @@ export default function TableSelectionPage() {
                     <span
                       className={`absolute top-2 right-2 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${isOccupied
                         ? "bg-red-500 text-white animate-pulse"
+                        : isBooking
+                        ? "bg-yellow-500 text-yellow-900"
                         : "bg-sky-500 text-white"
                         }`}
                     >
-                      {isOccupied ? t("occupied") : t("available")}
+                      {isOccupied ? t("occupied") : isBooking ? t("booking") || "Booking" : t("available")}
                     </span>
 
                     {/* Table Icon (Dining table with chairs) */}
@@ -236,7 +246,7 @@ export default function TableSelectionPage() {
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className={`w-12 h-12 mb-2 transition-transform duration-300 group-hover:scale-105 ${isOccupied ? "text-red-600" : "text-sky-600"
+                      className={`w-12 h-12 mb-2 transition-transform duration-300 ${!isBooking ? "group-hover:scale-105" : ""} ${isOccupied ? "text-red-600" : isBooking ? "text-yellow-700" : "text-sky-600"
                         }`}
                     >
                       {/* Left Chair */}
@@ -253,13 +263,13 @@ export default function TableSelectionPage() {
                     </svg>
 
                     {/* Table name */}
-                    <span className={`text-xl font-black font-dangrek transition-colors duration-200 ${isOccupied ? "text-red-950 group-hover:text-red-600" : "text-sky-950 group-hover:text-sky-600"
+                    <span className={`text-xl font-black font-dangrek transition-colors duration-200 ${isOccupied ? "text-red-950 group-hover:text-red-600" : isBooking ? "text-yellow-950" : "text-sky-950 group-hover:text-sky-600"
                       }`}>
                       {table.name}
                     </span>
 
                     {/* Zone description */}
-                    <span className={`text-[10px] mt-0.5 font-medium tracking-wide ${isOccupied ? "text-red-600/60" : "text-sky-600/60"
+                    <span className={`text-[10px] mt-0.5 font-medium tracking-wide ${isOccupied ? "text-red-600/60" : isBooking ? "text-yellow-800/70" : "text-sky-600/60"
                       }`}>
                       {table.zone === "VIP / Special" ? t("vipZone") : table.zone}
                     </span>
