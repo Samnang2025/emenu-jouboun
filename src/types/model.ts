@@ -64,8 +64,10 @@ interface orderHistory {
   second_name?: string; //ST Khmer name of the order item
   price: number; // Regular price of the order item
   promo_price: number; // Promotional price of the order item
-  quantity: number; // Quantity of the order item
+  quantity: number | string; // Quantity of the order item
   suspend_id: string; // ID for the suspended order
+  brand?: string | null;
+  subtotal?: string | number;
 }
 
 // Complete order history, including metadata and items

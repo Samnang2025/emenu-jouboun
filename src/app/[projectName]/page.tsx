@@ -64,14 +64,14 @@ export default function TableSelectionPage() {
       try {
         // Fetch branding & tables in parallel
         const [brandRes, tablesRes] = await Promise.allSettled([
-          axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/setting`),
-          axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`)
+          axios.get(`http://localhost/846_jouboun/api/DriverController/setting`),
+          axios.get(`http://localhost/846_jouboun/api/DriverController/tables`)
         ]);
 
         if (brandRes.status === "fulfilled" && brandRes.value.data) {
           setStoreInfo({
             siteName: brandRes.value.data.site_name || "Tonle Coffee",
-            logoUrl: `https://pos-jouboun.tsdsolution.net/assets/uploads/logos/${brandRes.value.data.logo}`
+            logoUrl: `http://localhost/846_jouboun/assets/uploads/logos/${brandRes.value.data.logo}`
           });
         }
 
@@ -217,13 +217,12 @@ export default function TableSelectionPage() {
                       if (!isBooking) handleTableSelect(table.id);
                     }}
                     disabled={isBooking}
-                    className={`group relative flex flex-col justify-center items-center py-6 px-3 border rounded-2xl transition-all duration-300 shadow-sm ${
-                      isBooking ? "cursor-not-allowed opacity-90" : "hover:scale-[1.04] active:scale-[0.97]"
-                    } ${isOccupied
-                      ? "bg-red-300 border-rose-200/80 hover:border-rose-400 text-white hover:shadow-[0_8px_20px_rgba(239,68,68,0.1)]"
-                      : isBooking
-                      ? "bg-yellow-300 border-yellow-400 text-yellow-900 shadow-inner"
-                      : "bg-sky-50 hover:bg-sky-100/70 border-sky-200/80 hover:border-sky-400 text-sky-950 hover:shadow-[0_8px_20px_rgba(14,165,233,0.1)]"
+                    className={`group relative flex flex-col justify-center items-center py-6 px-3 border rounded-2xl transition-all duration-300 shadow-sm ${isBooking ? "cursor-not-allowed opacity-90" : "hover:scale-[1.04] active:scale-[0.97]"
+                      } ${isOccupied
+                        ? "bg-red-300 border-rose-200/80 hover:border-rose-400 text-white hover:shadow-[0_8px_20px_rgba(239,68,68,0.1)]"
+                        : isBooking
+                          ? "bg-yellow-300 border-yellow-400 text-yellow-900 shadow-inner"
+                          : "bg-sky-50 hover:bg-sky-100/70 border-sky-200/80 hover:border-sky-400 text-sky-950 hover:shadow-[0_8px_20px_rgba(14,165,233,0.1)]"
                       }`}
                   >
                     {/* Status Pill Badge */}
@@ -231,8 +230,8 @@ export default function TableSelectionPage() {
                       className={`absolute top-2 right-2 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${isOccupied
                         ? "bg-red-500 text-white animate-pulse"
                         : isBooking
-                        ? "bg-yellow-500 text-yellow-900"
-                        : "bg-sky-500 text-white"
+                          ? "bg-yellow-500 text-yellow-900"
+                          : "bg-sky-500 text-white"
                         }`}
                     >
                       {isOccupied ? t("occupied") : isBooking ? t("booking") || "Booking" : t("available")}

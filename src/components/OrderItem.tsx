@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/lib/store";
@@ -14,7 +14,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import { useTranslation } from "@/lib/i18n";
 
 
-export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickOrder, setClickOrder }: any) {
+export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickOrder, setClickOrder, menuData }: any) {
   const { t } = useTranslation();
   const { projectName, tableNumber } = useParams()
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +22,70 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
   const { items: basket, totalItems, totalPrice } = useSelector((state: RootState) => state.cart);
 
   const dispatch = useDispatch()
+
+  // Build product lookup map to retrieve brand, second_name, etc.
+  const productMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (menuData && Array.isArray(menuData)) {
+      menuData.forEach((cat: any) => {
+        if (cat.items && Array.isArray(cat.items)) {
+          cat.items.forEach((item: any) => {
+            if (item.id) map.set(String(item.id), item);
+            if (item.code) map.set(String(item.code), item);
+          });
+        }
+      });
+    }
+    return map;
+  }, [menuData]);
+
+  // Group items by total quantity if brand is "Drink"
+  const processedHistoryItems = useMemo(() => {
+    if (!historyOrder?.items || !Array.isArray(historyOrder.items)) return [];
+
+    const drinkMap = new Map<string, any>();
+    const result: any[] = [];
+
+    historyOrder.items.forEach((item: any) => {
+      const matchedProduct = productMap.get(String(item.id)) || productMap.get(String(item.code));
+      const brand = item.brand || matchedProduct?.brand;
+      const second_name = item.second_name || matchedProduct?.second_name;
+      const isDrink = brand?.trim().toLowerCase() === "drink" || brand?.trim().toLowerCase() === "drinks";
+
+      const enrichedItem = {
+        ...item,
+        brand: brand || item.brand,
+        second_name: second_name || item.second_name,
+      };
+
+      if (isDrink) {
+        const drinkKey = String(item.id || item.code || item.name);
+        if (drinkMap.has(drinkKey)) {
+          const existing = drinkMap.get(drinkKey);
+          const currentQty = parseFloat(existing.quantity) || 0;
+          const addQty = parseFloat(item.quantity) || 0;
+          existing.quantity = currentQty + addQty;
+          if (existing.subtotal && item.subtotal) {
+            existing.subtotal = (parseFloat(existing.subtotal) || 0) + (parseFloat(item.subtotal) || 0);
+          }
+        } else {
+          const newItem = {
+            ...enrichedItem,
+            quantity: parseFloat(item.quantity) || 0,
+          };
+          drinkMap.set(drinkKey, newItem);
+          result.push(newItem);
+        }
+      } else {
+        result.push({
+          ...enrichedItem,
+          quantity: parseFloat(item.quantity) || 0,
+        });
+      }
+    });
+
+    return result;
+  }, [historyOrder?.items, productMap]);
 
   // Fetch table name fallback if history order is null
   const [tableName, setTableName] = useState("");
@@ -32,7 +96,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
     } else if (tableNumber) {
       const fetchTableName = async () => {
         try {
-          const res = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`);
+          const res = await axios.get(`http://localhost/846_jouboun/api/DriverController/tables`);
           if (res.data && Array.isArray(res.data)) {
             const currentTable = res.data.find((t: any) => t.id === tableNumber);
             if (currentTable) {
@@ -66,7 +130,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
 
     try {
       // Validate table status to prevent ordering on a booked table
-      const tableRes = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`);
+      const tableRes = await axios.get(`http://localhost/846_jouboun/api/DriverController/tables`);
       if (tableRes.data && Array.isArray(tableRes.data)) {
         const currentTable = tableRes.data.find((t: any) => t.id === tableNumber);
         if (currentTable && currentTable.active === "2") {
@@ -92,7 +156,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
       };
       const jsonData = JSON.stringify(data)
       const response = await axios.post(
-        `https://pos-jouboun.tsdsolution.net/api/DriverController/order`,
+        `http://localhost/846_jouboun/api/DriverController/order`,
         jsonData,
         {
           headers: {
@@ -170,7 +234,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
                 <h1 className="font-dangrek text-center mt-5">{t("completedOrder")}</h1>
                 <div className="flex flex-col w-full space-y-3">
                   {
-                    historyOrder?.items?.map((item: any, index: any) => (
+                    processedHistoryItems.map((item: any, index: any) => (
                       <HistoryOrder key={index} cartItem={item} cur={cur} index={index} />
                     ))
                   }

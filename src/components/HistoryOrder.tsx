@@ -22,7 +22,7 @@ export default function HistoryOrder({ cartItem, cur, index }: PropsType) {
     const actual_price = numeral(price).format('0.[00]');
     const qty = numeral(quantity).format('0')
     // Construct image URL
-    const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
+    const imgUrl = `http://localhost/846_jouboun/assets/uploads/`;
 
     return (
         <>
@@ -41,6 +41,11 @@ export default function HistoryOrder({ cartItem, cur, index }: PropsType) {
                     {/* Item details (name, price, promo_price) */}
                     <div>
                         <p className='font-battambong text-sm'>{displayName}</p>
+                        {cartItem.comment && (
+                            <p className='text-xs text-gray-500 italic font-battambong'>
+                                {cartItem.comment}
+                            </p>
+                        )}
                         <div className="space-x-3">
                             <span className='text-orange-600 font-bold'>{cur || "$"}{promo_price ? real_price : actual_price}</span>
                             {
