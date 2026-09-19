@@ -64,14 +64,14 @@ export default function TableSelectionPage() {
       try {
         // Fetch branding & tables in parallel
         const [brandRes, tablesRes] = await Promise.allSettled([
-          axios.get(`http://localhost/846_jouboun/api/DriverController/setting`),
-          axios.get(`http://localhost/846_jouboun/api/DriverController/tables`)
+          axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/setting`),
+          axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`)
         ]);
 
         if (brandRes.status === "fulfilled" && brandRes.value.data) {
           setStoreInfo({
             siteName: brandRes.value.data.site_name || "Tonle Coffee",
-            logoUrl: `http://localhost/846_jouboun/assets/uploads/logos/${brandRes.value.data.logo}`
+            logoUrl: `https://pos-jouboun.tsdsolution.net/assets/uploads/logos/${brandRes.value.data.logo}`
           });
         }
 

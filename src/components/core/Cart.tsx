@@ -41,7 +41,7 @@ export default function Cart({ cartItem, isOrderPage, cur }: PropType) {
   const [isModalOpen, setIsModalOpen] = useState(false); // Sok Thean popup Component
 
   // Base URL for image
-  const imgUrl = `http://localhost/846_jouboun/assets/uploads/`;
+  const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
 
   // Handle adding item to cart
   const handleOrder = (comment?: string) => { //Sok Thean Add comment

@@ -96,7 +96,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
     } else if (tableNumber) {
       const fetchTableName = async () => {
         try {
-          const res = await axios.get(`http://localhost/846_jouboun/api/DriverController/tables`);
+          const res = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`);
           if (res.data && Array.isArray(res.data)) {
             const currentTable = res.data.find((t: any) => t.id === tableNumber);
             if (currentTable) {
@@ -130,7 +130,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
 
     try {
       // Validate table status to prevent ordering on a booked table
-      const tableRes = await axios.get(`http://localhost/846_jouboun/api/DriverController/tables`);
+      const tableRes = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`);
       if (tableRes.data && Array.isArray(tableRes.data)) {
         const currentTable = tableRes.data.find((t: any) => t.id === tableNumber);
         if (currentTable && currentTable.active === "2") {
@@ -156,7 +156,7 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
       };
       const jsonData = JSON.stringify(data)
       const response = await axios.post(
-        `http://localhost/846_jouboun/api/DriverController/order`,
+        `https://pos-jouboun.tsdsolution.net/api/DriverController/order`,
         jsonData,
         {
           headers: {
