@@ -176,6 +176,9 @@ export async function fetchSetting(forceRefresh = false): Promise<SettingData | 
       };
       memorySetting = { data: parsed, timestamp: Date.now() };
       writeSession(SETTING_CACHE_KEY, parsed);
+      if (typeof document !== "undefined" && parsed.site_name) {
+        document.title = parsed.site_name;
+      }
       return parsed;
     })
     .catch((err) => {

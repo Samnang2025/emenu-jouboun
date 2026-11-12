@@ -7,25 +7,10 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 
-export async function generateMetadata({ params }: { params: { projectName: string } }): Promise<Metadata> {
-  try {
-    const response = await fetch(`https://pos-jouboun.tsdsolution.net/api/DriverController/setting`, {
-      next: { revalidate: 3600 },
-    });
-    const data: any = await response.json();
-    return {
-      title: data.site_name || "Tonle Coffee",
-      icons: `https://pos-jouboun.tsdsolution.net/assets/uploads/logos/${data.logo}`
-    };
-  } catch (error) {
-    console.error("Error fetching metadata:", error);
-    // Return default metadata or handle the error as per your requirement
-    return {
-      title: "Default Title",
-      icons: "/default-icon.png"
-    };
-  }
-}
+export const metadata: Metadata = {
+  title: "ភោជនីយដ្ឋាន​ ជួបអូន​",
+  icons: "https://pos-jouboun.tsdsolution.net/assets/uploads/logos/ជួបអូន_LO.png",
+};
 
 export default function RootLayout({
   params,

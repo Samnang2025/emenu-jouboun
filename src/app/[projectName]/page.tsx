@@ -63,6 +63,9 @@ export default function TableSelectionPage() {
   useEffect(() => {
     let isMounted = true;
 
+    // Warm up menu products & store settings immediately in parallel while user views tables
+    prefetchMenuAndSettings();
+
     const loadPageData = async () => {
       try {
         const freshTables = await fetchTables(true);
@@ -85,8 +88,6 @@ export default function TableSelectionPage() {
         if (isMounted) {
           setLoading(false);
         }
-        // Warm up menu products & store settings in the background while user selects a table
-        prefetchMenuAndSettings();
       }
     };
 
@@ -196,6 +197,12 @@ export default function TableSelectionPage() {
                 return (
                   <button
                     key={table.id}
+                    onMouseEnter={() => {
+                      if (!isBooking) router.prefetch(`/${projectName}/${table.id}`);
+                    }}
+                    onTouchStart={() => {
+                      if (!isBooking) router.prefetch(`/${projectName}/${table.id}`);
+                    }}
                     onClick={() => {
                       if (!isBooking) handleTableSelect(table.id);
                     }}

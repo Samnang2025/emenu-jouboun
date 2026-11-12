@@ -1,5 +1,6 @@
 "use client"
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useTranslation } from "@/lib/i18n";
 import InforCard from '../InfoCard';
@@ -15,32 +16,29 @@ export default function NavBar() {
   const { t } = useTranslation();
   const cached = getCachedSetting();
   const [metadata, setMetadata] = useState<PropType | undefined>(
-    cached ? { title: cached.site_name, icons: cached.logo } : undefined
+    cached ? { title: cached.site_name, icons: cached.logo } : { title: 'ភោជនីយដ្ឋាន​ ជួបអូន​', icons: 'ជួបអូន_LO.png' }
   );
   const { projectName } = useParams();
   const router = useRouter();
 
   useEffect(() => {
+    if (projectName) {
+      router.prefetch(`/${projectName}`);
+    }
     let isMounted = true;
     fetchSetting()
       .then((data) => {
         if (!isMounted) return;
         if (data) {
           setMetadata({ title: data.site_name, icons: data.logo });
-        } else {
-          setMetadata({ title: 'Default Title', icons: '/default-logo.png' });
         }
       })
-      .catch(() => {
-        if (isMounted) {
-          setMetadata({ title: 'Default Title', icons: '/default-logo.png' });
-        }
-      });
+      .catch(() => {});
 
     return () => {
       isMounted = false;
     };
-  }, [projectName]);
+  }, [projectName, router]);
 
   return (
     <nav className='bg-white px-3 m-1 flex flex-row justify-between items-center pb-0 z-10 max-w-[575px] w-full '>
@@ -55,15 +53,16 @@ export default function NavBar() {
       {/* Information Card Section */}
       <InforCard title={metadata?.title || ''} logo={metadata?.icons || ''}>
         <div className='flex justify-center items-center gap-2 h-[22px] rounded-md py-4 px-2'>
-          <button
-            onClick={() => router.push(`/${projectName}`)}
+          <Link
+            href={`/${projectName}`}
+            prefetch={true}
             className='flex items-center gap-1 font-battambong text-[14px] text-gray-500 border border-gray-400 rounded-full px-2 py-1 hover:bg-gray-50 transition-colors whitespace-nowrap'
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-gray-500">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
             </svg>
             <span>{t("changeTable")}</span>
-          </button>
+          </Link>
           <button
             onClick={() => (document.getElementById("my_modal_2") as HTMLDialogElement).showModal()}
             className='flex items-center gap-1 font-battambong text-[14px] text-gray-500 border border-gray-400 rounded-full px-2 py-1 hover:bg-gray-50 transition-colors whitespace-nowrap'
