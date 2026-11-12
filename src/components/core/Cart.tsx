@@ -1,12 +1,10 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import Image from "next/image";
+import React, { memo, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import "@/app/globals.css";
 import { Menu } from "@/types/model";
 import { addToCart } from "@/lib/cart/cartSlice";
 import { RootState } from "@/lib/store";
-import { useParams } from "next/navigation";
 import numeral from "numeral";
 import { useTranslation } from "@/lib/i18n";
 import FoodItemModal from "./FoodItemModal"; // Sok Thean popup Cofmponent
@@ -17,8 +15,9 @@ type PropType = {
   cur?: any
 };
 
+const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
 
-export default function Cart({ cartItem, isOrderPage, cur }: PropType) {
+function Cart({ cartItem, isOrderPage, cur }: PropType) {
   //AKK Translation
   const { locale } = useTranslation();
   const { id, name, second_name, imagePath, price, promo_price, code, type, subcategory, brand } = cartItem; //Sok Thean Subcategory
@@ -28,24 +27,17 @@ export default function Cart({ cartItem, isOrderPage, cur }: PropType) {
   const real_price = numeral(promo_price).format("0.[00]");
   const actual_price = numeral(price).format("0.[00]");
 
-  const { projectName } = useParams();
   const dispatch = useDispatch();
-  const cart = useSelector((state: RootState) => state.cart);
 
-  // Find existing items in cart and sum their quantities
-  const currentQuantity = cart.items
-    .filter((item) => item.id === id)
-    .reduce((sum, item) => sum + item.quantity, 0);
-  const [eachItemOrderNumber, setOrderItem] = useState(currentQuantity);
+  // Granular selector: only re-renders this card when its own quantity changes
+  const eachItemOrderNumber = useSelector((state: RootState) =>
+    state.cart.items.reduce((sum, item) => (item.id === id ? sum + item.quantity : sum), 0)
+  );
 
   const [isModalOpen, setIsModalOpen] = useState(false); // Sok Thean popup Component
 
-  // Base URL for image
-  const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
-
   // Handle adding item to cart
   const handleOrder = (comment?: string) => { //Sok Thean Add comment
-    setOrderItem((prev) => prev + 1); // Increment local quantity state
     const cartData = {
       id,
       name,
@@ -65,15 +57,10 @@ export default function Cart({ cartItem, isOrderPage, cur }: PropType) {
     dispatch(addToCart(cartData)); // Dispatch action to add item to Redux store
   };
 
-  // Reset local quantity state when currentQuantity changes
-  useEffect(() => {
-    setOrderItem(currentQuantity);
-  }, [currentQuantity]);
-
   return (
     <>
       <div className="card w-[49%]">
-        <div className="w-full rounded-xl overflow-hidden  relative">
+        <div className="w-full rounded-xl overflow-hidden bg-gray-100 relative">
           <button onClick={() => isOrderPage && setIsModalOpen(true)} className="w-full h-full "> {/* Sok Thean popup Component */}
             <img
               className="object-cover w-full h-[200px]"
@@ -81,6 +68,8 @@ export default function Cart({ cartItem, isOrderPage, cur }: PropType) {
               alt={cartItem.name}
               width={250}
               height={250}
+              loading="lazy"
+              decoding="async"
             />
           </button>
           {/* Button to add item to basket (visible only if isOrderPage is true) */}
@@ -115,16 +104,20 @@ export default function Cart({ cartItem, isOrderPage, cur }: PropType) {
           </div>
         </div>
       </div>
-      {/* Sok Thean popup Component */}
-      <FoodItemModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        cartItem={cartItem}
-        cur={cur}
-        onAdd={(comment) => handleOrder(comment)} //Sok Thean Add comment
-        imgUrl={imgUrl}
-      />
+      {/* Sok Thean popup Component - Lazily mounted only when opened */}
+      {isModalOpen && (
+        <FoodItemModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          cartItem={cartItem}
+          cur={cur}
+          onAdd={(comment) => handleOrder(comment)} //Sok Thean Add comment
+          imgUrl={imgUrl}
+        />
+      )}
       {/* End popup Component */}
     </>
   );
 }
+
+export default memo(Cart);

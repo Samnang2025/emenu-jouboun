@@ -1,12 +1,11 @@
 // AKK Night Food Cart
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { memo, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import "@/app/globals.css";
 import { Menu } from "@/types/model";
 import { addToCart } from "@/lib/cart/cartSlice";
 import { RootState } from "@/lib/store";
-import { useParams } from "next/navigation";
 import numeral from "numeral";
 import { useTranslation } from "@/lib/i18n"; //AKK Translation
 import FoodItemModal from "./FoodItemModal";
@@ -17,7 +16,9 @@ type PropType = {
   cur?: any;
 };
 
-export default function NightFoodCart({ cartItem, isOrderPage, cur }: PropType) {
+const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
+
+function NightFoodCart({ cartItem, isOrderPage, cur }: PropType) {
   //AKK Translation
   const { locale } = useTranslation();
   const { id, name, second_name, imagePath, price, promo_price, code, type, subcategory, brand } = cartItem;
@@ -27,21 +28,15 @@ export default function NightFoodCart({ cartItem, isOrderPage, cur }: PropType) 
   const real_price = numeral(promo_price).format("0.[00]");
   const actual_price = numeral(price).format("0.[00]");
 
-  const { projectName } = useParams();
   const dispatch = useDispatch();
-  const cart = useSelector((state: RootState) => state.cart);
 
-  const currentQuantity = cart.items
-    .filter((item) => item.id === id)
-    .reduce((sum, item) => sum + item.quantity, 0);
-  const [eachItemOrderNumber, setOrderItem] = useState(currentQuantity);
+  const eachItemOrderNumber = useSelector((state: RootState) =>
+    state.cart.items.reduce((sum, item) => (item.id === id ? sum + item.quantity : sum), 0)
+  );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
-
   const handleOrder = (comment?: string) => {
-    setOrderItem((prev) => prev + 1);
     const cartData = {
       id,
       name,
@@ -58,10 +53,6 @@ export default function NightFoodCart({ cartItem, isOrderPage, cur }: PropType) 
     };
     dispatch(addToCart(cartData));
   };
-
-  useEffect(() => {
-    setOrderItem(currentQuantity);
-  }, [currentQuantity]);
 
   return (
     <>
@@ -84,14 +75,18 @@ export default function NightFoodCart({ cartItem, isOrderPage, cur }: PropType) 
         </div>
       </div>
 
-      <FoodItemModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        cartItem={cartItem}
-        cur={cur}
-        onAdd={(comment) => handleOrder(comment)}
-        imgUrl={imgUrl}
-      />
+      {isModalOpen && (
+        <FoodItemModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          cartItem={cartItem}
+          cur={cur}
+          onAdd={(comment) => handleOrder(comment)}
+          imgUrl={imgUrl}
+        />
+      )}
     </>
   );
 }
+
+export default memo(NightFoodCart);

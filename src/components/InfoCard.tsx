@@ -1,31 +1,29 @@
-import Image from "next/image";
 import React, { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
-import axios from "axios";
 import { useParams } from "next/navigation";
-import { toast } from "react-toastify"; type propTypes = {
+import { fetchStoreConfig, getCachedStoreConfig } from "@/lib/apiCache";
+
+type propTypes = {
   children: ReactNode;
   title: string
   logo: string
 };
 export default function InforCard({ children, title, logo }: propTypes) {
-  const [info, setInfo] = useState<any>()
-  const [icons, setIcons] = useState<any>()
+  const cachedConfig = getCachedStoreConfig();
+  const [info, setInfo] = useState<any>(cachedConfig);
+  const [icons, setIcons] = useState<any>(cachedConfig?.icon);
   const { projectName } = useParams()
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/e_orderConfig`);
-        const data = response.data;
-        setInfo(data);
-        console.log("fetch icons", data);
-        setIcons(data.icon);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
+    let isMounted = true;
+    fetchStoreConfig().then((data) => {
+      if (!isMounted || !data) return;
+      setInfo(data);
+      setIcons(data.icon);
+    });
+    return () => {
+      isMounted = false;
     };
-    fetchData();
   }, [projectName]);
   return (
     <>

@@ -1,15 +1,20 @@
 "use client";
 import { ImageSlider, Model, NotFound, SearchBar } from "@/components/";
 import { Cart, BasketBar, Footer, Loading, PageNotFound, NavBar, NightFoodCart, NightFoodBanner } from "@/components/core"; //Sok Thean Night Food
-import { useState, useEffect, useRef, useCallback } from "react";
-import Image from "next/image";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import axios from "axios";
 import OrderItem from "@/components/OrderItem";
 import { Provider } from "react-redux";
 import store from "@/lib/store";
-import { MenuType } from "@/types/model";
+import { Menu, MenuType } from "@/types/model";
 import { useParams } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
+import {
+  fetchMenuProducts,
+  fetchSetting,
+  getCachedMenuProducts,
+  getCachedSetting,
+} from "@/lib/apiCache";
 
 // Special category names for custom UI rendering
 const NIGHT_FOOD_CATEGORY = "ម្ហូបយប់"; //Sok Thean
@@ -19,14 +24,18 @@ export default function Home() {
 
   const { projectName, tableNumber } = useParams();
   const { t } = useTranslation();
-  const project = Array.isArray(projectName) ? projectName[0] : projectName;
-  const [loading, setLoading] = useState(true); // Loading state
+
+  const cachedMenu = useMemo(() => getCachedMenuProducts(), []);
+  const cachedSetting = useMemo(() => getCachedSetting(), []);
+
+  const [loading, setLoading] = useState(!cachedMenu); // Instant if prefetched/cached
   const [historyOrder, setHistoryOrder] = useState<any>(null);
   const [isClickOrder, setClickOrder] = useState(false);
 
   // Fetch history order details (suspend order) on component mount and when an order is placed
   useEffect(() => {
     if (!projectName || !tableNumber) return;
+    let isMounted = true;
     const fetchHistoryOrder = async () => {
       try {
         const formData = new FormData();
@@ -35,12 +44,17 @@ export default function Home() {
           `https://pos-jouboun.tsdsolution.net/api/DriverController/orders`,
           formData
         );
-        setHistoryOrder(response.data);
+        if (isMounted) {
+          setHistoryOrder(response.data);
+        }
       } catch (error) {
         console.error("Error fetching history order:", error);
       }
     };
     fetchHistoryOrder();
+    return () => {
+      isMounted = false;
+    };
   }, [projectName, tableNumber, isClickOrder]);
 
   //Sok Thean Subcategory
@@ -50,72 +64,126 @@ export default function Home() {
   const subRef = useRef<Record<string, HTMLDivElement | null>>({}); // Ref to store sub-section elements
   //End ST Subcategory
   const [searchQuery, setSearchQuery] = useState(""); // State for search query
-  const [data, setData] = useState<MenuType>([]); // State for fetched data
-  const [filteredMenu, setFilteredMenu] = useState<MenuType>([]); // State for filtered menu items
+  const [data, setData] = useState<MenuType>(cachedMenu || []); // State for fetched data
   const isOrderPage = true; // Flag for order page
-  const [images, setImages] = useState<any[]>([])
+  const [images, setImages] = useState<any[]>(cachedSetting?.slides || []);
   const [isNotFound, setNotFound] = useState(false);
-  const [cur, setCur] = useState(null);
+  const [cur, setCur] = useState<any>(cachedSetting?.symbol ?? null);
 
+  // Progressive rendering: render first 2 categories on frame 1 for instant paint, then unlock all on next frame
+  const [renderAllCategories, setRenderAllCategories] = useState(false);
 
   const imgUrl = `https://pos-jouboun.tsdsolution.net/assets/uploads/`;
 
-  // Fetch data on component mount
+  // Fetch data on component mount (deduplicated & cached)
   useEffect(() => {
-    const fetchImages = async () => {
-      try {
-        const response = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/setting`);
-        const data = response.data
-        console.log("Data fetched successfully", response.data);
-        const correctedSlideShow = data.slide_Show.replace(/,\s*]$/, ']');
-        const slideShowArray = JSON.parse(correctedSlideShow);
-        setImages(slideShowArray);
-        setCur(data.symbol);
-        // Handle the fetched data here
-      } catch (err) {
-        console.log("Error fetching data", err);
-      }
-    };
+    let isMounted = true;
 
-    fetchImages();
-    const fetchData = async () => {
-      try {
-        const response = await axios.get(
-          `https://pos-jouboun.tsdsolution.net/api/DriverController/GetAllProductWithCat?t=${Date.now()}` //Sok Thean Add t=${Date.now()} to prevent caching
+    fetchSetting().then((setting) => {
+      if (!isMounted || !setting) return;
+      setImages(setting.slides);
+      setCur(setting.symbol);
+    });
+
+    fetchMenuProducts()
+      .then((dataJson) => {
+        if (!isMounted) return;
+        setData(dataJson);
+        if (dataJson.length === 0) {
+          setNotFound(true);
+        }
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        console.error("Error fetching data:", error);
+        if (!cachedMenu) {
+          setNotFound(true);
+        }
+        setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectName, cachedMenu]);
+
+  useEffect(() => {
+    if (!loading && data.length > 0 && !renderAllCategories) {
+      const id = requestAnimationFrame(() => {
+        setRenderAllCategories(true);
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [loading, data.length, renderAllCategories]);
+
+  // Pre-compute filtered & subcategory-grouped menu in a single pass
+  const groupedMenu = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return data
+      .map((category) => {
+        const items = q
+          ? category.items.filter((item) => item.name.toLowerCase().includes(q))
+          : category.items;
+
+        if (items.length === 0) return null;
+
+        const isListStyle =
+          category.category === NIGHT_FOOD_CATEGORY ||
+          category.category === RIVER_SNACK_CATEGORY;
+
+        // Group items by subcategory in a single O(N) pass
+        const subMap = new Map<string, Menu[]>();
+        const bannerImagesSet = new Set<string>();
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const sub = item.subcategory && item.subcategory.trim() !== "" ? item.subcategory.trim() : "ផ្សេងៗ";
+          let group = subMap.get(sub);
+          if (!group) {
+            group = [];
+            subMap.set(sub, group);
+          }
+          group.push(item);
+
+          if (isListStyle && item.imagePath && item.imagePath.trim() !== "") {
+            bannerImagesSet.add(item.imagePath);
+          }
+        }
+
+        const subNames = Array.from(subMap.keys()).sort((a, b) =>
+          a === "ផ្សេងៗ" ? 1 : b === "ផ្សេងៗ" ? -1 : 0
         );
 
-        const dataJson: MenuType = response.data;
-        console.log(dataJson)
-        setData(dataJson); // Set fetched data
-        setFilteredMenu(dataJson); // Initialize filteredMenu with fetched data
+        const subcategories = subNames.map((subName) => ({
+          subName,
+          items: subMap.get(subName) || [],
+        }));
 
-        if (dataJson.length == 0) {
-          setNotFound(true)
-        }
-        setLoading(false); // Data fetched, set loading to false
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        setNotFound(true)
-        setLoading(false); // Error occurred, set loading to false
-      }
-    };
+        return {
+          category: category.category,
+          items,
+          isListStyle,
+          bannerImages: isListStyle ? Array.from(bannerImagesSet) : [],
+          subcategories,
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null);
+  }, [data, searchQuery]);
 
-    fetchData();
-  }, [projectName]); // Dependency array ensures fetch occurs when projectName changes
-
-  // Filter items based on search query and update filteredMenu
-  useEffect(() => {
-    const filteredItems = data
-      .map((category) => ({
-        category: category.category,
-        items: category.items.filter((item) =>
-          item.name.toLowerCase().includes(searchQuery.toLowerCase())
-        ),
-      }))
-      .filter((category) => category.items.length > 0);
-
-    setFilteredMenu(filteredItems);
-  }, [searchQuery, data]); // Update filteredMenu when searchQuery or data changes
+  // Memoize active category's subcategories for the top sub-navigation bar
+  const activeCategorySubNames = useMemo(() => {
+    const activeCat = data[activeSection];
+    if (!activeCat || !activeCat.items) return [];
+    const subSet = new Set<string>();
+    for (let i = 0; i < activeCat.items.length; i++) {
+      const sub = activeCat.items[i].subcategory;
+      subSet.add(sub && sub.trim() !== "" ? sub.trim() : "ផ្សេងៗ");
+    }
+    return Array.from(subSet).sort((a, b) =>
+      a === "ផ្សេងៗ" ? 1 : b === "ផ្សេងៗ" ? -1 : 0
+    );
+  }, [data, activeSection]);
 
   // Memoized handler for search input change
   const handleSearchInput = useCallback(
@@ -128,17 +196,25 @@ export default function Home() {
 
   // Scroll to a section based on index
   const handleScroll = (index: number) => {
-    ref.current[index]?.scrollIntoView({ behavior: "smooth" });
+    if (!renderAllCategories) {
+      setRenderAllCategories(true);
+    }
     setActiveSection(index);
-    // Sok Thean Subcategory
     setActiveSubSection(""); // Reset sub-section when changing main section
+    requestAnimationFrame(() => {
+      ref.current[index]?.scrollIntoView({ behavior: "smooth" });
+    });
   };
 
   // Scroll to a sub-section based on sub-category name
   const handleSubScroll = (subName: string) => {
-    // Standard scrolling behavior for non-filtered categories
-    subRef.current[subName]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!renderAllCategories) {
+      setRenderAllCategories(true);
+    }
     setActiveSubSection(subName);
+    requestAnimationFrame(() => {
+      subRef.current[subName]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
 
@@ -177,23 +253,16 @@ export default function Home() {
         {/* SubCategory section */}
         {data[activeSection] && (
           <ul className="no-scrollbar flex flex-nowrap gap-2 overflow-x-scroll" style={{ "margin": "0px 60px", "paddingBottom": "5px" }}>
-            {Array.from(new Set(data[activeSection].items.map(item => {
-              // akk Other Subcate
-              const sub = item.subcategory;
-              return sub && sub.trim() !== "" ? sub.trim() : "ផ្សេងៗ";
-            })))
-              .sort((a, b) => a === "ផ្សេងៗ" ? 1 : b === "ផ្សេងៗ" ? -1 : 0)
-              // end Other Subcate
-              .map((subName) => (
-                <li
-                  key={subName}
-                  onClick={() => handleSubScroll(`${data[activeSection].category}-${subName}`)}
-                  className={`font-battambong cursor-pointer text-nowrap max-[500px]:text-[16px] text-[16px] py-[3px] px-3 w-fit rounded-full border-gray-300 border ${activeSubSection === `${data[activeSection].category}-${subName}` ? "bg-orange-600 text-white border-orange-600" : "text-gray-900"
-                    }`}
-                >
-                  {subName}
-                </li>
-              ))}
+            {activeCategorySubNames.map((subName) => (
+              <li
+                key={subName}
+                onClick={() => handleSubScroll(`${data[activeSection].category}-${subName}`)}
+                className={`font-battambong cursor-pointer text-nowrap max-[500px]:text-[16px] text-[16px] py-[3px] px-3 w-fit rounded-full border-gray-300 border ${activeSubSection === `${data[activeSection].category}-${subName}` ? "bg-orange-600 text-white border-orange-600" : "text-gray-900"
+                  }`}
+              >
+                {subName}
+              </li>
+            ))}
           </ul>
         )}
         {/*End ST Subcategory*/}
@@ -213,13 +282,18 @@ export default function Home() {
           <div className="mt-2">
             {/* Render filtered menu items */}
             {/*Sok Thean Night Food 3L*/}
-            {filteredMenu.map((category, categoryIndex) => {
-              const isListStyle = category.category === NIGHT_FOOD_CATEGORY || category.category === RIVER_SNACK_CATEGORY;
+            {groupedMenu.map((category, categoryIndex) => {
+              const shouldRenderItems = renderAllCategories || categoryIndex < 2;
 
               return (
                 <div
-                  key={categoryIndex}
+                  key={category.category}
                   className=""
+                  style={
+                    categoryIndex >= 1
+                      ? { contentVisibility: "auto", containIntrinsicSize: "0 600px" }
+                      : undefined
+                  }
                   ref={(el) => {
                     ref.current[categoryIndex] = el;
                   }}
@@ -239,103 +313,74 @@ export default function Home() {
                   )}
                   {/*Sok Thean Night Food*/}
                   {/* === Custom UI for list style categories === */}
-                  {isListStyle ? (
+                  {category.isListStyle ? (
                     <div className="night-food-section">
-                      {/* akk Banner images comment*/}
                       {/* Banner images - retrieve all unique food images in this category */}
-                      {category.items.length > 0 && (
+                      {shouldRenderItems && category.bannerImages.length > 0 && (
                         <NightFoodBanner
-                          images={Array.from(
-                            new Set(
-                              category.items
-                                .map((item) => item.imagePath)
-                                .filter((img) => img && img.trim() !== "")
-                            )
-                          )}
-                          // {/* end Banner images comment*/}
+                          images={category.bannerImages}
                           imgUrl={imgUrl}
                         />
                       )}
 
                       {/* Items listed without images, grouped by subcategory */}
                       <div className="grid grid-cols-1 gap-x-4">
-                        {Array.from(new Set(category.items.map(item => {
-                          const sub = item.subcategory;
-                          return sub && sub.trim() !== "" ? sub.trim() : "ផ្សេងៗ";
-                        })))
-                          .sort((a, b) => a === "ផ្សេងៗ" ? 1 : b === "ផ្សេងៗ" ? -1 : 0)
-                          .map((subName) => (
-                            <div
-                              key={subName}
-                              className="mb-4"
-                              ref={(el) => {
-                                subRef.current[`${category.category}-${subName}`] = el;
-                              }}
-                            >
-                              <h2 className="font-battambong text-[24px] font-semibold mb-1 px-1 text-black">
-                                {subName}
-                              </h2>
-                              <div className="flex flex-col w-full">
-                                {category.items
-                                  .filter(item => {
-                                    const sub = item.subcategory;
-                                    const normalizedSub = sub && sub.trim() !== "" ? sub.trim() : "ផ្សេងៗ";
-                                    return normalizedSub === subName;
-                                  })
-                                  .map((item) => (
-                                    <NightFoodCart
-                                      key={item.id}
-                                      cartItem={item}
-                                      isOrderPage={isOrderPage}
-                                      cur={cur}
-                                    />
-                                  ))}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Sok Thean Subcategory */}
-                      {/* Display items grouped by sub-category */}
-                      {Array.from(new Set(category.items.map(item => {
-                        // akk Other Subcategory
-                        const sub = item.subcategory;
-                        return sub && sub.trim() !== "" ? sub.trim() : "ផ្សេងៗ";
-                        // end akk Other Subcategory
-                      })))
-                        .sort((a, b) => a === "ផ្សេងៗ" ? 1 : b === "ផ្សេងៗ" ? -1 : 0)
-                        .map((subName) => (
+                        {category.subcategories.map(({ subName, items: subItems }) => (
                           <div
                             key={subName}
-                            className="mb-8"
+                            className="mb-4"
                             ref={(el) => {
                               subRef.current[`${category.category}-${subName}`] = el;
                             }}
                           >
-                            <h2 className="font-battambong text-[20px] font-semibold mb-2 px-1 text-black">
+                            <h2 className="font-battambong text-[24px] font-semibold mb-1 px-1 text-black">
                               {subName}
                             </h2>
-                            <div className="flex flex-wrap flex-row justify-between gap-y-4">
-                              {category.items
-                                .filter(item => {
-                                  const sub = item.subcategory;
-                                  const normalizedSub = sub && sub.trim() !== "" ? sub.trim() : "ផ្សេងៗ";
-                                  return normalizedSub === subName;
-                                })
-                                .map((item) => (
-
-                                  <Cart
+                            {shouldRenderItems && (
+                              <div className="flex flex-col w-full">
+                                {subItems.map((item) => (
+                                  <NightFoodCart
                                     key={item.id}
                                     cartItem={item}
                                     isOrderPage={isOrderPage}
                                     cur={cur}
                                   />
                                 ))}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Sok Thean Subcategory */}
+                      {/* Display items grouped by sub-category */}
+                      {category.subcategories.map(({ subName, items: subItems }) => (
+                        <div
+                          key={subName}
+                          className="mb-8"
+                          ref={(el) => {
+                            subRef.current[`${category.category}-${subName}`] = el;
+                          }}
+                        >
+                          <h2 className="font-battambong text-[20px] font-semibold mb-2 px-1 text-black">
+                            {subName}
+                          </h2>
+                          {shouldRenderItems && (
+                            <div className="flex flex-wrap flex-row justify-between gap-y-4">
+                              {subItems.map((item) => (
+                                <Cart
+                                  key={item.id}
+                                  cartItem={item}
+                                  isOrderPage={isOrderPage}
+                                  cur={cur}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                       {/*End ST Subcategory*/}
                     </>
                   )}
@@ -390,7 +435,7 @@ export default function Home() {
         {/* Footer section */}
         <footer className="mt-16 pb-[120px]">
           {/* Display not found message when no items */}
-          {filteredMenu.length <= 0 && <NotFound />}
+          {groupedMenu.length <= 0 && <NotFound />}
           <Footer />
         </footer>
       </main>

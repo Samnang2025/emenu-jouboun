@@ -1,12 +1,10 @@
 "use client"
 import React, { useEffect, useState } from 'react';
-import Image from 'next/image';
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useTranslation } from "@/lib/i18n";
-import { Logo } from '@/components';
 import InforCard from '../InfoCard';
-import axios from 'axios';
 import { useParams, useRouter } from 'next/navigation';
+import { fetchSetting, getCachedSetting } from '@/lib/apiCache';
 
 interface PropType {
   title: string;
@@ -15,24 +13,33 @@ interface PropType {
 
 export default function NavBar() {
   const { t } = useTranslation();
-  const [metadata, setMetadata] = useState<PropType | undefined>();
+  const cached = getCachedSetting();
+  const [metadata, setMetadata] = useState<PropType | undefined>(
+    cached ? { title: cached.site_name, icons: cached.logo } : undefined
+  );
   const { projectName } = useParams();
   const router = useRouter();
-  useEffect(() => {
-    const fetchMetadata = async () => {
-      try {
-        const response = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/setting`);
-        const data = response.data;
-        // Set metadata state with fetched data
-        setMetadata({ title: data.site_name, icons: data.logo });
-      } catch (error) {
-        console.error('Error fetching metadata:', error);
-        // Handle error fetching metadata
-        setMetadata({ title: 'Default Title', icons: '/default-logo.png' });
-      }
-    };
 
-    fetchMetadata();
+  useEffect(() => {
+    let isMounted = true;
+    fetchSetting()
+      .then((data) => {
+        if (!isMounted) return;
+        if (data) {
+          setMetadata({ title: data.site_name, icons: data.logo });
+        } else {
+          setMetadata({ title: 'Default Title', icons: '/default-logo.png' });
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setMetadata({ title: 'Default Title', icons: '/default-logo.png' });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [projectName]);
 
   return (

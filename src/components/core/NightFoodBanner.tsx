@@ -39,6 +39,8 @@ const NightFoodBanner: React.FC<PropType> = ({ images, imgUrl }) => {
               className="object-cover w-full h-full"
               src={`${imgUrl}${image}`}
               alt={`Night food banner ${index + 1}`}
+              loading="lazy"
+              decoding="async"
             />
           </SwiperSlide>
         ))}

@@ -12,6 +12,7 @@ import axios from "axios";
 import { orderHistoryType } from "@/types/model";
 import { toast, ToastContainer } from 'react-toastify';
 import { useTranslation } from "@/lib/i18n";
+import { fetchTables, getTableNameById } from "@/lib/apiCache";
 
 
 export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickOrder, setClickOrder, menuData }: any) {
@@ -88,26 +89,28 @@ export default function OrderItem({ cur, historyOrder, setHistoryOrder, isClickO
   }, [historyOrder?.items, productMap]);
 
   // Fetch table name fallback if history order is null
-  const [tableName, setTableName] = useState("");
+  const [tableName, setTableName] = useState(() => getTableNameById(tableNumber));
 
   useEffect(() => {
     if (historyOrder?.data?.table_name) {
       setTableName(historyOrder.data.table_name);
     } else if (tableNumber) {
-      const fetchTableName = async () => {
-        try {
-          const res = await axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`);
-          if (res.data && Array.isArray(res.data)) {
-            const currentTable = res.data.find((t: any) => t.id === tableNumber);
-            if (currentTable) {
-              setTableName(currentTable.name);
-            }
-          }
-        } catch (e) {
-          console.error("Error fetching table name", e);
+      const cachedName = getTableNameById(tableNumber);
+      if (cachedName) {
+        setTableName(cachedName);
+        return;
+      }
+      let isMounted = true;
+      fetchTables().then((tables) => {
+        if (!isMounted || !tables) return;
+        const currentTable = tables.find((t) => String(t.id) === String(tableNumber));
+        if (currentTable) {
+          setTableName(currentTable.name);
         }
+      });
+      return () => {
+        isMounted = false;
       };
-      fetchTableName();
     }
   }, [historyOrder, tableNumber]);
 

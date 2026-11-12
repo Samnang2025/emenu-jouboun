@@ -1,13 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
 import { Loading } from "@/components/core";
+import {
+  fetchTables,
+  getCachedTables,
+  prefetchMenuAndSettings,
+  TableItem,
+} from "@/lib/apiCache";
 
 // Fallback tables mapped with IDs, Names and Zones
-const FALLBACK_TABLES = [
+const FALLBACK_TABLES: TableItem[] = [
   { id: "3", name: "A1", zone: "Zone A", active: "0" },
   { id: "4", name: "A2", zone: "Zone A", active: "0" },
   { id: "5", name: "A3", zone: "Zone A", active: "0" },
@@ -48,66 +53,40 @@ export default function TableSelectionPage() {
   const router = useRouter();
   const { t } = useTranslation();
 
-  const [loading, setLoading] = useState(true);
-  const [storeInfo, setStoreInfo] = useState({
-    siteName: "Tonle Coffee",
-    logoUrl: "/images/tonle.jpg"
-  });
-
-  const [tables, setTables] = useState<{ id: string; name: string; zone: string; active?: string }[]>([]);
+  const cachedTables = useMemo(() => getCachedTables(), []);
+  const [loading, setLoading] = useState(!cachedTables);
+  const [tables, setTables] = useState<TableItem[]>(cachedTables || []);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedZone, setSelectedZone] = useState("All");
 
-  // Fetch store information (branding) and tables dynamically from API
+  // Fetch tables dynamically from API & prefetch menu in background for instant table join
   useEffect(() => {
+    let isMounted = true;
+
     const loadPageData = async () => {
       try {
-        // Fetch branding & tables in parallel
-        const [brandRes, tablesRes] = await Promise.allSettled([
-          axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/setting`),
-          axios.get(`https://pos-jouboun.tsdsolution.net/api/DriverController/tables`)
-        ]);
-
-        if (brandRes.status === "fulfilled" && brandRes.value.data) {
-          setStoreInfo({
-            siteName: brandRes.value.data.site_name || "Tonle Coffee",
-            logoUrl: `https://pos-jouboun.tsdsolution.net/assets/uploads/logos/${brandRes.value.data.logo}`
-          });
-        }
-
-        if (tablesRes.status === "fulfilled" && Array.isArray(tablesRes.value.data)) {
-          const mappedTables = tablesRes.value.data.map((t: any) => {
-            let zone = "Other Zone";
-            if (t.floor_id === "1") zone = "Zone A";
-            else if (t.floor_id === "2") zone = "Zone B";
-            else if (t.floor_id === "3") zone = "Zone C";
-            else if (t.floor_id === "4") zone = "Zone K";
-            else if (t.floor_id === "5") zone = "VIP / Special";
-            else {
-              // Standard prefix backup
-              if (t.name.toUpperCase().startsWith("A")) zone = "Zone A";
-              else if (t.name.toUpperCase().startsWith("B")) zone = "Zone B";
-              else if (t.name.toUpperCase().startsWith("C")) zone = "Zone C";
-              else if (t.name.toUpperCase().startsWith("K")) zone = "Zone K";
-              else if (["VIP", "KTV", "BOAT"].includes(t.name.toUpperCase())) zone = "VIP / Special";
-            }
-            return {
-              id: t.id,
-              name: t.name,
-              zone: zone,
-              active: t.active
-            };
-          });
-          setTables(mappedTables);
-        } else {
+        const freshTables = await fetchTables(true);
+        if (!isMounted) return;
+        if (freshTables && freshTables.length > 0) {
+          setTables(freshTables);
+          // Prefetch the table route bundle so clicking any table is instant
+          router.prefetch(`/${projectName}/${freshTables[0].id}`);
+        } else if (!cachedTables) {
           console.warn("Tables API returned invalid data, using static fallback.");
           setTables(FALLBACK_TABLES);
         }
       } catch (err) {
+        if (!isMounted) return;
         console.warn("Could not load page data, falling back to defaults.", err);
-        setTables(FALLBACK_TABLES);
+        if (!cachedTables) {
+          setTables(FALLBACK_TABLES);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
+        // Warm up menu products & store settings in the background while user selects a table
+        prefetchMenuAndSettings();
       }
     };
 
@@ -116,7 +95,11 @@ export default function TableSelectionPage() {
     } else {
       setLoading(false);
     }
-  }, [projectName]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectName, router, cachedTables]);
 
   // List of unique zones + "All" for filtering
   const zones = useMemo(() => {

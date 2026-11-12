@@ -35,8 +35,8 @@ export default function HistoryOrder({ cartItem, cur, index }: PropsType) {
                         </span>
                     )}
                     {/* Image */}
-                    <div className='h-[62px] w-[62px] rounded-lg overflow-hidden'>
-                        <img src={`${imgUrl}/${imagePath}`} alt="" width={1000} height={1000} className="object-cover w-full h-full" />
+                    <div className='h-[62px] w-[62px] rounded-lg overflow-hidden bg-gray-100'>
+                        <img src={`${imgUrl}/${imagePath}`} alt="" width={1000} height={1000} loading="lazy" decoding="async" className="object-cover w-full h-full" />
                     </div>
                     {/* Item details (name, price, promo_price) */}
                     <div>
